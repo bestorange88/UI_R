@@ -1,17 +1,18 @@
-
-
 import { useState } from "react"
-import { ChevronLeft, Home, Eye, EyeOff, User, Key, Code, Globe, Check, ChevronDown, Phone, Mail } from "lucide-react"
+import { ChevronLeft, Home, Eye, EyeOff, User, Key, Code, Globe, Check, ChevronDown, Phone, Mail, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FloatingParticles } from "./floating-particles"
+import { supabase } from "@/integrations/supabase/client"
+import { useToast } from "@/hooks/use-toast"
 
 type AuthView = "login" | "register" | "forgot" | "language"
 
 interface AuthPagesProps {
   onClose?: () => void
   initialView?: AuthView
+  onLoginSuccess?: () => void
 }
 
 const languages = [
@@ -123,18 +124,63 @@ function LanguageView({
 function LoginView({ 
   onNavigate, 
   onShowLanguage,
-  selectedLang 
+  selectedLang,
+  onLoginSuccess
 }: { 
   onNavigate: (view: AuthView) => void
   onShowLanguage: () => void
   selectedLang: string
+  onLoginSuccess?: () => void
 }) {
-  const [phone, setPhone] = useState("82345688")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const { toast } = useToast()
   
   const langInfo = languages.find(l => l.code === selectedLang) || languages[3]
+  
+  const handleLogin = async () => {
+    if (!email || !password) {
+      toast({
+        title: "錯誤",
+        description: "請輸入郵箱和密碼",
+        variant: "destructive"
+      })
+      return
+    }
+    
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) {
+        toast({
+          title: "登錄失敗",
+          description: error.message,
+          variant: "destructive"
+        })
+      } else if (data.user) {
+        toast({
+          title: "登錄成功",
+          description: "歡迎回來！"
+        })
+        onLoginSuccess?.()
+      }
+    } catch (err) {
+      toast({
+        title: "錯誤",
+        description: "登錄時發生錯誤",
+        variant: "destructive"
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
   
   return (
     <div className="min-h-screen bg-background relative">
@@ -160,17 +206,17 @@ function LoginView({
           </div>
           <h2 className="text-center text-[#22d3ee] text-lg mb-6">用戶登錄</h2>
           
-          {/* Phone/Email Field */}
+          {/* Email Field */}
           <div className="mb-4">
-            <label className="block text-sm text-foreground mb-2">郵箱/手機號</label>
+            <label className="block text-sm text-foreground mb-2">郵箱</label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="pl-10 bg-card/80 border-border/50 h-12"
-                placeholder="輸入郵箱或手機號"
+                placeholder="輸入郵箱"
               />
             </div>
           </div>
@@ -223,8 +269,12 @@ function LoginView({
           </div>
           
           {/* Login Button */}
-          <Button className="w-full h-12 bg-gradient-to-r from-[#8b5cf6] to-[#22d3ee] hover:opacity-90 text-white font-medium">
-            登錄
+          <Button 
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full h-12 bg-gradient-to-r from-[#8b5cf6] to-[#22d3ee] hover:opacity-90 text-white font-medium"
+          >
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "登錄"}
           </Button>
           
           {/* Divider */}
@@ -650,10 +700,15 @@ function ForgotPasswordView({
 }
 
 // Main Auth Pages Component
-export function AuthPages({ onClose, initialView = "login" }: AuthPagesProps) {
+export function AuthPages({ onClose, initialView = "login", onLoginSuccess }: AuthPagesProps) {
   const [view, setView] = useState<AuthView>(initialView)
   const [selectedLang, setSelectedLang] = useState("zh-TW")
   const [showLanguage, setShowLanguage] = useState(false)
+  
+  const handleLoginSuccess = () => {
+    onLoginSuccess?.()
+    onClose?.()
+  }
   
   if (showLanguage) {
     return (
@@ -672,6 +727,7 @@ export function AuthPages({ onClose, initialView = "login" }: AuthPagesProps) {
           onNavigate={setView}
           onShowLanguage={() => setShowLanguage(true)}
           selectedLang={selectedLang}
+          onLoginSuccess={handleLoginSuccess}
         />
       )
     case "register":
